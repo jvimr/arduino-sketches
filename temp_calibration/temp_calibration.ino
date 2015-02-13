@@ -19,16 +19,35 @@
  This example code is in the public domain.
  	 
  */
+#include<stdlib.h>
 
-
-#define PROG_VERSION "1.0.1"
+#define PROG_VERSION "1.0.2"
 #define PROG_NAME "ANALOG_TEMPS_CALIBRATION"
 
 #include <SD.h>
 
 Sd2Card card;
 
+#include <dht.h>
 
+dht DHT;
+
+#define DHT11_PIN 3
+
+int led = 13;
+
+
+int last ;
+void blink(){
+  Serial.println("blink()" + String(last, DEC));
+  if(last == LOW){
+    digitalWrite(led, HIGH);
+    last = HIGH;
+  }else{
+    digitalWrite(led, LOW); 
+    last = LOW;
+  }
+}
 
 // On the Ethernet Shield, CS is pin 4. Note that even if it's not
 // used as the CS pin, the hardware CS pin (10 on most Arduino boards,
@@ -36,21 +55,32 @@ Sd2Card card;
 // functions will not work.
 const int chipSelect = 4;
  boolean sdOk= false;
- int analogPin = 0;
-int digitalPin  = 3;
+
+
  
  
  const int A0_PIN = 0;
- const int A5_PIN = 0;
+ const int A1_PIN = 1;
+ const int A2_PIN = 2;
  
  File dataFile;
 void setup()
 {
+  
+  pinMode(led, OUTPUT); 
+  
+  
+  blink();
+  
  // Open serial communications and wait for port to open:
   Serial.begin(115200);
    while (!Serial) {
+  //   blink();
     ; // wait for serial port to connect. Needed for Leonardo only
   }
+  
+  
+  blink();
 
 
  Serial.print(PROG_NAME);
@@ -61,7 +91,8 @@ void setup()
   // make sure that the default chip select pin is set to
   // output, even if you don't use it:
   pinMode(10, OUTPUT);
-  pinMode(digitalPin, INPUT);
+  
+ 
   
   Serial.print("opening file, using chipSelect ");
   Serial.println(chipSelect);
@@ -93,25 +124,48 @@ void setup()
   
 //  init analog in
    pinMode(A0_PIN, INPUT); 
-   pinMode(A5_PIN, INPUT);   
+   pinMode(A1_PIN, INPUT);  
+   pinMode(A2_PIN, INPUT);  
+   
+  Serial.print("Temp. sensor @");
+  Serial.println(DHT11_PIN);
+  Serial.println("Type,\tstatus,\tHumidity (%),\tTemperature (C)"); 
+  
+   pinMode(DHT11_PIN, INPUT); 
+   
+   
 }
 
 
 
+float getDhtTemp(){
+   int chk = DHT.read11(DHT11_PIN);
+   
+   if(chk != 0){
+      return -999.0;
+   }
+   return DHT.temperature;
+       
+}
 
+char buff[] = "                                                               ";
 String getDataString()
 {
   // make a string for assembling the data to log:
-  String dataString = String( millis(), DEC)  + ",";
 
   // read three sensors and append to the string:
   //for (int analogPin = 0; analogPin < 5; analogPin++) {
     int a0 = analogRead(A0_PIN);
-    int a5 = analogRead(A5_PIN);    
+    int a1 = analogRead(A1_PIN);    
+    int a2 = analogRead(A2_PIN);    
     //int sensor = analogRead(analogPin);
+    String dataString = dtostrf(getDhtTemp(), 6, 2, buff);
+    dataString += ",";
     dataString += String(a0);
     dataString += ",";
-    dataString += String(a5);
+    dataString += String(a1);
+    dataString += ",";
+    dataString += String(a2);
     
 
   //}
@@ -120,12 +174,14 @@ String getDataString()
 }
 
 int fIndex = 0;
-char *fn = {"                   "};
+char *fn = {"                          "};
 String filename = "data.csv";
 
 
 File getFile(){
   File dataFile;
+  
+   filename = "f" + String(analogRead(5), DEC) + ".csv";
    // open the file. note that only one file can be open at a time,
   // so you have to close this one before opening another.
   filename.toCharArray(fn, 12);
@@ -142,7 +198,8 @@ File getFile(){
 }
 
 
-
+String lastVal = "               ";
+char b[] = "                                                         ";
 
 void loop()
 {
@@ -160,10 +217,36 @@ void loop()
   if (dataFile) {
     
       dataString = getDataString();
+      
+      
+      if(dataString == lastVal){
+        Serial.println("value still same");
+          delay(3000);
+        return; 
+      }
+      
+      if(dataString.indexOf("-999") >=0){
+        Serial.println("DHT 11 value invalid - " + dataString);
+          delay(3000);
+        return; 
+      }
+      
+      
+      lastVal = String(dataString);
+
+      
+      
+      
+      String mls = String( millis(), DEC)  + ",";
+      dataFile.print(mls);
+
+      
       dataFile.println(dataString);
       dataFile.flush();
     // print to the serial port too:
-      Serial.println(filename + "=>" + dataString);
+      Serial.println(filename + "=>" + mls + dataString);
+      
+      blink();
       
   }  else{
   // if the file isn't open, pop up an error:
@@ -172,7 +255,7 @@ void loop()
     fIndex +=1;
   }
   
-  delay(1000);
+  delay(20000);
 }
 
 
